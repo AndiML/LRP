@@ -31,7 +31,6 @@ class CelebaFolder:
         self.attrs_df = attrs_df.reset_index(drop=True)
         self.transform = transform
         self.target_attr = target_attr
-
         # Ensures "image_id" is a column
         if "image_id" not in self.attrs_df.columns:
             raise ValueError("attrs_df must have a column named 'image_id' for the filename.")
@@ -51,7 +50,7 @@ class CelebaFolder:
 
         if self.transform:
             img = self.transform(img)
-
+        
         if self.target_attr:
             # Single‐attribute label. Mapping −1 → 0, +1 → 1
             raw_val = row[self.target_attr]
@@ -72,7 +71,7 @@ class Celeba(Dataset):
     dataset_id = 'celeba'
     """Machine-readable ID that uniquely identifies this dataset."""
 
-    def __init__(self, path, target_attr=None) -> None:
+    def __init__(self, path, target_attr="Smiling") -> None:
         """
         Args:
             path (str): Root directory under which you placed a “celeba/” folder:
@@ -97,14 +96,11 @@ class Celeba(Dataset):
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
-
-
-        train_ds, val_ds, test_ds = self.load_celeba_splits(transform=custom_transforms, target_attr=None)
+        train_ds, val_ds, test_ds = self.load_celeba_splits(transform=custom_transforms, target_attr=target_attr)
         self._training_data = train_ds
         self._validation_data = val_ds
         self._test_data = test_ds
     
-
     def load_celeba_splits(
             self,
             transform=None,

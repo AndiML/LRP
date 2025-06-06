@@ -2,7 +2,6 @@ import os
 import logging
 from datetime import datetime
 from argparse import Namespace
-import torch
 
 from lrp.commands.base import BaseCommand
 from lrp.src.datasets.dataset import Dataset
@@ -29,9 +28,10 @@ class RunLrpCommand(BaseCommand):
 
          # Log dataset download and configuration.
         self.logger.info("Loeading Dataset for LRP Experiments: %s",command_line_arguments.dataset.upper())
-        dataclass_instance = Dataset.create(command_line_arguments.dataset, command_line_arguments.dataset_path)
-
-        print("Is MPS available?", torch.backends.mps.is_available())
+        if command_line_arguments.multiclass:
+            dataclass_instance = Dataset.create(command_line_arguments.dataset, command_line_arguments.dataset_path)
+        else:
+            dataclass_instance = Dataset.create(command_line_arguments.dataset, command_line_arguments.dataset_path, target_attr="Smiling")
 
         # Configure device.
         device = 'mps' if command_line_arguments.use_gpu else 'cpu'
@@ -91,7 +91,7 @@ class RunLrpCommand(BaseCommand):
             scheduler=scheduler,
             logger=self.logger,
             experiment_logger=experiment_logger,
-            multi_label=True
+            multi_label=command_line_arguments.multiclass
         )
         trainer.run()
 

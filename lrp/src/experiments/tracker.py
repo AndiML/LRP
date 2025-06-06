@@ -4,9 +4,8 @@ import os
 import csv
 import yaml
 import logging
-from datetime import datetime
 from argparse import Namespace
-from typing import Any, Optional, Dict
+from typing import Any, Dict
 
 from torch.utils.tensorboard.writer import SummaryWriter
 

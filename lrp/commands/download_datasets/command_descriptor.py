@@ -73,10 +73,10 @@ class RunLrpCommandDescriptor(BaseCommandDescriptor):
             help="Batch size during training."
         )
         parser.add_argument(
-            '-mul',
-            '--',
+            '-M',
+            '--multiclass',
             action='store_true',
-            help="Batch size during training."
+            help="Use multiclass training."
         )
         parser.add_argument(
             '-l',
