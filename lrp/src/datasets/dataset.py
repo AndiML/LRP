@@ -206,7 +206,7 @@ def create_data_loader(data: DatasetData, batch_size: int, shuffle_samples: bool
     return torch.utils.data.DataLoader(
         data,
         batch_size=batch_size,
-        num_workers=4,
+        num_workers=0,
         shuffle=shuffle_samples,
         pin_memory=True,
         worker_init_fn=initialize_data_loader_worker,

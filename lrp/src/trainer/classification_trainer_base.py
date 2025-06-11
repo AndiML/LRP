@@ -106,7 +106,6 @@ class BaseClassificationTrainer:
             for batch_idx, (inputs, labels) in enumerate(self.train_loader, start=1):
                 inputs = inputs.to(self.device)
                 labels = labels.to(self.device)
-
                 self.optimizer.zero_grad()
                 outputs = self.model(inputs)
                 if self.multi_label:
@@ -120,8 +119,6 @@ class BaseClassificationTrainer:
 
                 loss.backward()
                 self.optimizer.step()
-                
-
                 batch_size = inputs.size(0)
                 running_loss += loss.item()
                 running_corrects += correct_per_sample
@@ -129,7 +126,6 @@ class BaseClassificationTrainer:
 
                 avg_loss_so_far = running_loss / batch_idx
                 acc_so_far = running_corrects / running_total
-                break
                 progress.update(
                     task,
                     advance=1,

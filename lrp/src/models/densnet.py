@@ -4,6 +4,7 @@ import torchvision
 from lrp.src.models.base_model import BaseModel
 
 class DenseNetModel(BaseModel):
+    
     model_id = "densenet"
     def __init__(
         self,
