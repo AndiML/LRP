@@ -34,7 +34,7 @@ class RunLrpCommand(BaseCommand):
             dataclass_instance = Dataset.create(command_line_arguments.dataset, command_line_arguments.dataset_path, target_attr="Smiling")
         
         # Configure device.
-        device = 'mps' if command_line_arguments.use_gpu else 'cpu'
+        device = 'cuda' if command_line_arguments.use_gpu else 'cpu'
         self.logger.info("Using device: %s for training on dataset: %s", device.upper(), command_line_arguments.dataset)
 
         # Define training and model checkpoint paths.
