@@ -30,8 +30,15 @@ class ResNetModel(BaseModel):
                 f"Valid ResNet versions include 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152', etc."
             )
 
-        # Instantiate the chosen ResNet backbone.
-        backbone = model_fn(pretrained=pretrained)
+        candidates = [name for name in dir(torchvision.models) if name.endswith("_Weights") and name.lower().startswith(version.lower())]
+        if not candidates:
+            raise RuntimeError(f"No Weights enum found for '{version}'")
+        if len(candidates) > 1:
+            raise RuntimeError(f"Ambiguous Weights enums {candidates!r} for '{version}'")
+
+        weights_enum = getattr(torchvision.models, candidates[0])
+        weights = weights_enum.DEFAULT if pretrained else None
+        backbone = model_fn(weights=weights)
 
         # Replace the final fully‐connected layer so that out_features = num_targets
         in_features = backbone.fc.in_features

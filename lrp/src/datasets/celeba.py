@@ -71,7 +71,7 @@ class Celeba(Dataset):
     dataset_id = 'celeba'
     """Machine-readable ID that uniquely identifies this dataset."""
 
-    def __init__(self, path, target_attr="Smiling") -> None:
+    def __init__(self, path, target_attr=None) -> None:
         """
         Args:
             path (str): Root directory under which you placed a “celeba/” folder:
@@ -89,17 +89,21 @@ class Celeba(Dataset):
 
         self.path = path
         self.name = 'CelebA'
-        self.only_one_target_label = False if target_attr is None else True
-        custom_transforms = transforms.Compose([
-            transforms.CenterCrop((160, 160)),
-            transforms.Resize([128, 128]),
+        self.only_one_target_label = target_attr is not None
+        image_size = (64, 64)
+        data_transform=transforms.Compose([
+            transforms.Resize(image_size),
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            transforms.Normalize(mean=[0.5, 0.5, 0.5],
+                                std=[0.5, 0.5, 0.5])
         ])
-        train_ds, val_ds, test_ds = self.load_celeba_splits(transform=custom_transforms, target_attr=target_attr)
+
+        train_ds, val_ds, test_ds, class_weights = self.load_celeba_splits(transform=data_transform, target_attr=target_attr)
+    
         self._training_data = train_ds
         self._validation_data = val_ds
         self._test_data = test_ds
+        self._class_weights = class_weights
     
     def load_celeba_splits(
             self,
@@ -144,13 +148,24 @@ class Celeba(Dataset):
             train_df = attrs_df[train_mask].reset_index(drop=True)
             valid_df = attrs_df[valid_mask].reset_index(drop=True)
             test_df  = attrs_df[test_mask].reset_index(drop=True)
+            
+            # Computes the class weights and finds all the attribute columns
+            attrs_cols = [c for c in train_df.columns if c != 'image_id']
+
+            total_samples = len(train_df)
+            number_classes = len(attrs_cols)
+            pos_weights_count = numpy.zeros(len(attrs_cols))
+            for class_index, attr in enumerate(attrs_cols):
+                n_pos = int((train_df[attr] == 1).sum())
+                pos_weights_count[class_index] = n_pos
+            class_weights = total_samples / (pos_weights_count * number_classes)
 
             image_location = os.path.join(img_dir,"img_align_celeba", "img_align_celeba")
             train_ds = CelebaFolder(img_dir=image_location, attrs_df=train_df, transform=transform, target_attr=target_attr)
             val_ds   = CelebaFolder(img_dir=image_location, attrs_df=valid_df, transform=transform, target_attr=target_attr)
             test_ds  = CelebaFolder(img_dir=image_location, attrs_df=test_df, transform=transform, target_attr=target_attr)
 
-            return train_ds, val_ds, test_ds
+            return train_ds, val_ds, test_ds, class_weights
     
     @property
     def training_data(self) -> DatasetData:
@@ -181,6 +196,16 @@ class Celeba(Dataset):
         """
 
         return self._test_data
+    
+    @property
+    def class_weights(self) -> DatasetData:
+        """Gets the class weights of the training data.
+
+        Returns:
+            DatasetData: Returns the class weights of the training data.
+        """
+
+        return self._class_weights
 
     @property
     def sample_shape(self) -> tuple[int, ...]:
@@ -199,3 +224,4 @@ class Celeba(Dataset):
             int: Returns the number of distinct classes.
         """
         return 2 if self.only_one_target_label else 40
+ 

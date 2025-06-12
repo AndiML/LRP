@@ -32,7 +32,7 @@ class RunLrpCommand(BaseCommand):
             dataclass_instance = Dataset.create(command_line_arguments.dataset, command_line_arguments.dataset_path)
         else:
             dataclass_instance = Dataset.create(command_line_arguments.dataset, command_line_arguments.dataset_path, target_attr="Smiling")
-
+        
         # Configure device.
         device = 'mps' if command_line_arguments.use_gpu else 'cpu'
         self.logger.info("Using device: %s for training on dataset: %s", device.upper(), command_line_arguments.dataset)
@@ -87,11 +87,12 @@ class RunLrpCommand(BaseCommand):
             val_loader=valid_loader,
             device=device,
             num_epochs=command_line_arguments.epochs,
-            checkpoint_dir=training_dir,
+            checkpoint_dir=checkpoint_dir,
             scheduler=scheduler,
             logger=self.logger,
             experiment_logger=experiment_logger,
-            multi_label=command_line_arguments.multiclass
+            multi_label=command_line_arguments.multiclass,
+            class_weights=dataclass_instance.class_weights,
         )
         trainer.run()
 

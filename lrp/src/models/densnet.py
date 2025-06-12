@@ -29,12 +29,17 @@ class DenseNetModel(BaseModel):
                 f"Valid DenseNet versions include 'densenet121', 'densenet169', "
                 f"'densenet201', 'densenet161', etc."
             )
+        candidates = [name for name in dir(torchvision.models) if name.endswith("_Weights") and name.lower().startswith(version.lower())]
+        if not candidates:
+            raise RuntimeError(f"No Weights enum found for '{version}'")
+        if len(candidates) > 1:
+            raise RuntimeError(f"Ambiguous Weights enums {candidates!r} for '{version}'")
 
-        # Instantiate the chosen DenseNet backbone
-        backbone = model_fn(pretrained=pretrained)
+        weights_enum = getattr(torchvision.models, candidates[0])
+        weights = weights_enum.DEFAULT if pretrained else None
+        backbone = model_fn(weights=weights)
         in_features = backbone.classifier.in_features
         backbone.classifier = torch.nn.Linear(in_features, num_targets)
-
         self.backbone = backbone
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

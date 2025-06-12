@@ -1,7 +1,8 @@
 import os
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
+import numpy
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -39,6 +40,7 @@ class BaseClassificationTrainer:
         scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
         multi_label: bool = False,
         experiment_logger: Optional[ExperimentLogger] = None,
+        class_weights: numpy.ndarray[float] = None,
     ):
         """
         Args:
@@ -62,10 +64,11 @@ class BaseClassificationTrainer:
         self.num_epochs = num_epochs
         self.checkpoint_dir = checkpoint_dir
         os.makedirs(self.checkpoint_dir, exist_ok=True)
+        self.class_weights = class_weights
 
         # Choose loss function
         if multi_label:
-            self.criterion = nn.BCEWithLogitsLoss()
+            self.criterion = nn.BCEWithLogitsLoss(weight=torch.tensor(self.class_weights, dtype=torch.float32))
             self.multi_label = True
         else:
             self.criterion = nn.CrossEntropyLoss()
@@ -81,7 +84,7 @@ class BaseClassificationTrainer:
         # Lightweight experiment‐logger (optional)
         self.experiment_logger = experiment_logger
 
-    def train_one_epoch(self, epoch: int) -> (float, float):
+    def train_one_epoch(self, epoch: int):
         """
         Runs one epoch of training with a Rich progress bar.
         Returns (average training loss, training accuracy).
@@ -94,7 +97,7 @@ class BaseClassificationTrainer:
         num_batches = len(self.train_loader)
 
         with Progress(
-            TextColumn(f"[bold blue]Epoch {epoch} TRAIN"),
+            TextColumn("[bold blue]{task.description}"),
             BarColumn(),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             TextColumn("{task.completed}/{task.total}"),
@@ -102,7 +105,7 @@ class BaseClassificationTrainer:
             TimeRemainingColumn(),
             transient=False,
         ) as progress:
-            task = progress.add_task("", total=num_batches)
+            task = progress.add_task(f"Epoch {epoch} TRAIN", total=num_batches)
             for batch_idx, (inputs, labels) in enumerate(self.train_loader, start=1):
                 inputs = inputs.to(self.device)
                 labels = labels.to(self.device)
@@ -111,39 +114,44 @@ class BaseClassificationTrainer:
                 if self.multi_label:
                     loss = self.criterion(outputs, labels.float())
                     preds = (torch.sigmoid(outputs) > 0.5).float()
-                    correct_per_sample = (preds == labels).all(dim=1).sum().item()
+                    correct_bits = (preds == labels).float().sum().item()
+                    # total number of bits in this batch = batch_size * num_labels
+                    total_bits = labels.numel()
+                    running_corrects += correct_bits
+                    running_total += total_bits
+
                 else:
                     loss = self.criterion(outputs, labels)
                     preds = outputs.argmax(dim=1)
-                    correct_per_sample = (preds == labels).sum().item()
+                    correct_samples = (preds == labels).sum().item()
+                    batch_size = inputs.size(0)
+                    running_corrects += correct_samples
+                    running_total += batch_size
 
                 loss.backward()
                 self.optimizer.step()
-                batch_size = inputs.size(0)
                 running_loss += loss.item()
-                running_corrects += correct_per_sample
-                running_total += batch_size
 
                 avg_loss_so_far = running_loss / batch_idx
                 acc_so_far = running_corrects / running_total
+
                 progress.update(
                     task,
                     advance=1,
                     description=(
                         f"[blue]Epoch {epoch} TRAIN | "
-                        f"Loss: {avg_loss_so_far:.4f} | Acc: {acc_so_far:.4f}"
+                        f"Loss: {avg_loss_so_far:.4f} | Acc: {acc_so_far * 100:.2f}%"
                     ),
                 )
-
         avg_train_loss = running_loss / num_batches
         train_acc = running_corrects / running_total
         self.logger.info(
             f"Epoch {epoch} completed. "
-            f"Average Train Loss: {avg_train_loss:.4f}, Train Acc: {train_acc:.4f}"
+            f"Average Train Loss: {avg_train_loss:.4f}, Train Acc: {train_acc*100:.2f}%"
         )
         return avg_train_loss, train_acc
 
-    def validate(self, epoch: int) -> (float, float):
+    def validate(self, epoch: int):
         """
         Runs one pass through the validation set with a Rich progress bar.
         Returns (average validation loss, validation accuracy).
@@ -158,7 +166,7 @@ class BaseClassificationTrainer:
 
         with torch.no_grad():
             with Progress(
-                TextColumn(f"[bold green]Epoch {epoch} VALIDATE"),
+                TextColumn("[bold green]{task.description}"),
                 BarColumn(),
                 TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
                 TextColumn("{task.completed}/{task.total}"),
@@ -166,7 +174,7 @@ class BaseClassificationTrainer:
                 TimeRemainingColumn(),
                 transient=False,
             ) as progress:
-                task = progress.add_task("", total=num_batches)
+                task = progress.add_task(f"Epoch {epoch} VALIDATION", total=num_batches)
                 for batch_idx, (inputs, labels) in enumerate(self.val_loader, start=1):
                     inputs = inputs.to(self.device)
                     labels = labels.to(self.device)
@@ -176,17 +184,21 @@ class BaseClassificationTrainer:
                     if self.multi_label:
                         loss = self.criterion(outputs, labels.float())
                         preds = (torch.sigmoid(outputs) > 0.5).float()
-                        correct_per_sample = (preds == labels).all(dim=1).sum().item()
+                        correct_bits = (preds == labels).float().sum().item()
+                        # total number of bits in this batch = batch_size * num_labels
+                        total_bits = labels.numel()
+                        running_corrects += correct_bits
+                        running_total += total_bits
+
                     else:
                         loss = self.criterion(outputs, labels)
                         preds = outputs.argmax(dim=1)
-                        correct_per_sample = (preds == labels).sum().item()
+                        correct_samples = (preds == labels).sum().item()
+                        batch_size = inputs.size(0)
+                        running_corrects += correct_samples
+                        running_total += batch_size
 
-                    batch_size = inputs.size(0)
                     running_val_loss += loss.item()
-                    running_corrects += correct_per_sample
-                    running_total += batch_size
-
                     avg_val_so_far = running_val_loss / batch_idx
                     acc_val_so_far = running_corrects / running_total
 
@@ -195,17 +207,25 @@ class BaseClassificationTrainer:
                         advance=1,
                         description=(
                             f"[green]Epoch {epoch} VALIDATE | "
-                            f"Loss: {avg_val_so_far:.4f} | Acc: {acc_val_so_far:.4f}"
+                            f"Loss: {avg_val_so_far:.4f} | Acc: {acc_val_so_far*100:.2f} %"
                         ),
                     )
-            
 
         avg_val_loss = running_val_loss / num_batches
         val_acc = running_corrects / running_total
-        self.logger.info(f"Epoch {epoch} → Validation Loss: {avg_val_loss:.4f}, Val Acc: {val_acc:.4f}")
+        self.logger.info(f"Epoch {epoch} → Validation Loss: {avg_val_loss:.4f}, Val Acc: {val_acc*100:.4f}")
 
         # Checkpoint if improved
         if self.best_val_acc < val_acc:
+            
+            for name in os.listdir(self.checkpoint_dir):
+                path = os.path.join(self.checkpoint_dir, name)
+                # Only remove regular files (skip directories, symlinks, etc.)
+                if os.path.isfile(path):
+                    os.remove(path)
+                    self.logger.info(f"Deleted file: {path}")
+                else:
+                    self.logger.info(f"Skipped (not a file): {path}")
             self.best_val_acc = val_acc
             ckpt_name = f"best_model_epoch_{epoch}.pt"
             ckpt_path = os.path.join(self.checkpoint_dir, ckpt_name)

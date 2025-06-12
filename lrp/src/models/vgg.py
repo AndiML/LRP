@@ -31,7 +31,12 @@ class VGGModel(BaseModel):
             )
 
         # Instantiate the chosen VGG backbone
-        backbone = model_fn(pretrained=pretrained)
+        # for e.g. version="vgg16_bn" → enum_name="VGG16_BN_Weights"
+        enum_name = version.upper() + "_Weights"
+        weights_enum = getattr(torchvision.models, enum_name)
+        # pick pretrained or random
+        weights = weights_enum.DEFAULT if pretrained else None
+        backbone = model_fn(weights=weights)
 
         # Replaces only the final Linear layer so out_features = num_targets.
         in_features = backbone.classifier[-1].in_features
