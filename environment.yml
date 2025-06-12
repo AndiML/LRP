@@ -27,6 +27,7 @@ dependencies:
   - pyyaml
   - types-pyyaml
   - imbalanced-learn
+  - rich
   - pip:
       - pydoclint
       - medmnist
